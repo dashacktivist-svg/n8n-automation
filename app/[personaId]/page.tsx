@@ -33,17 +33,17 @@ export default function ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingPersona, setIsLoadingPersona] = useState(true);
-
-  // NEW STATE — marks chat as ended
   const [isChatEnded, setIsChatEnded] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingIntervalRef = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-  const scrollToBottom = (behaviour: ScrollBehavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior: behaviour });
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    // small timeout ensures mobile keyboard & layout settle
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior }), 50);
   };
 
   useEffect(() => {
@@ -83,7 +83,6 @@ export default function ChatbotPage() {
 
       setPersona(p);
 
-      // Load greeting as first message
       if (p.greeting) {
         setMessages([
           {
@@ -117,6 +116,7 @@ export default function ChatbotPage() {
 
     if (typingIntervalRef.current) window.clearInterval(typingIntervalRef.current);
 
+    // Slightly slower on mobile to feel natural
     const interval = window.setInterval(() => {
       if (index < text.length) {
         setTypingText(prev => prev + text.charAt(index));
@@ -134,9 +134,9 @@ export default function ChatbotPage() {
 
         setTypingText('');
         setIsLoading(false);
-        setTimeout(() => scrollToBottom(), 10);
+        setTimeout(() => scrollToBottom(), 30);
       }
-    }, 5);
+    }, 12);
 
     typingIntervalRef.current = interval as unknown as number;
   };
@@ -177,6 +177,9 @@ export default function ChatbotPage() {
       const data = await response.json();
       typeMessage(data.response || data.message || '');
 
+      // on mobile, ensure input loses focus so keyboard can hide if needed
+      inputRef.current?.blur();
+
     } catch (err) {
       setIsLoading(false);
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -193,7 +196,6 @@ export default function ChatbotPage() {
     }
   };
 
-  // NEW: End Chat – disable input, keep messages
   const handleEndChat = () => {
     if (typingIntervalRef.current) {
       window.clearInterval(typingIntervalRef.current);
@@ -201,24 +203,20 @@ export default function ChatbotPage() {
     }
 
     try {
-      const response = fetch(`${API_BASE_URL}/chat`, {
+      // fire-and-forget notify; don't await so UI responds instantly
+      fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationEnded: true,
           personaId,
           message: 'User has ended the conversation.',
-          conversationHistory: messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
+          conversationHistory: messages.map(msg => ({ role: msg.role, content: msg.content }))
         })
       });
     } catch (err) {
       console.error('Error notifying backend of chat end:', err);
-      if (err instanceof Error) {
-        setError(err.message);
-      }
+      if (err instanceof Error) setError(err.message);
     }
 
     setIsChatEnded(true);
@@ -235,12 +233,22 @@ export default function ChatbotPage() {
     }
   };
 
+  // ensure input is visible when focused (helpful on iOS)
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+
+    const onFocus = () => setTimeout(() => scrollToBottom('smooth'), 300);
+    el.addEventListener('focus', onFocus);
+    return () => el.removeEventListener('focus', onFocus);
+  }, [inputRef.current]);
+
   if (isLoadingPersona) {
     return (
-      <div className="chat-wrapper">
-        <div className="chat-container">
-          <div className="loading-container">
-            <div className="loading-spinner" />
+      <div className="chat-wrapper min-h-screen flex items-center justify-center bg-background">
+        <div className="chat-container w-full max-w-xl mx-4 md:mx-auto">
+          <div className="loading-container p-6 rounded-xl bg-surface">
+            <div className="loading-spinner mb-3" />
             <p className="loading-text">Loading chatbot...</p>
           </div>
         </div>
@@ -250,12 +258,12 @@ export default function ChatbotPage() {
 
   if (error && !persona) {
     return (
-      <div className="chat-wrapper">
-        <div className="chat-container">
-          <div className="error-container">
+      <div className="chat-wrapper min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="chat-container w-full max-w-xl mx-auto">
+          <div className="error-container p-6 rounded-xl bg-surface">
             <AlertCircle size={48} className="error-icon" />
-            <h2 className="error-title">Chatbot Not Found</h2>
-            <p className="error-message">{error}</p>
+            <h2 className="error-title mt-2">Chatbot Not Found</h2>
+            <p className="error-message mt-1">{error}</p>
           </div>
         </div>
       </div>
@@ -263,128 +271,145 @@ export default function ChatbotPage() {
   }
 
   return (
-    <div className="chat-wrapper">
-      <div className="chat-container">
-        <div className="chat-header">
-          <div className="header-content">
-            <div className="logo-container">
-              <Sparkles className="logo-sparkle" />
-              <Bot className="logo-icon" />
+    <div className="chat-wrapper min-h-screen flex flex-col bg-background text-white">
+      {/* Header - sticky on top */}
+      <header className="chat-header sticky top-0 z-20 bg-surface/90 backdrop-blur-md border-b border-surface-light">
+        <div className="max-w-3xl mx-auto px-3 md:px-6 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="logo-container p-2 rounded-lg bg-primary/10 md:p-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="logo-sparkle" />
+                <Bot className="logo-icon" />
+              </div>
             </div>
-            <div className="header-text">
-              <h1 className="header-title">{persona?.name || 'AI Assistant'}</h1>
-              <p className="header-subtitle">{persona?.description || 'Powered by Gemini AI'}</p>
+            <div className="header-text leading-tight">
+              <h1 className="header-title text-sm md:text-lg font-semibold">{persona?.name || 'AI Assistant'}</h1>
+              <p className="header-subtitle text-xs md:text-sm text-surface-light truncate max-w-xs">{persona?.description || 'Powered by Gemini AI'}</p>
             </div>
           </div>
 
-          <div className="status-indicator">
-            <div className="status-dot" />
-            <span className="status-text">{isChatEnded ? "Ended" : "Online"}</span>
+          <div className="flex items-center gap-2">
+            <div className="status-indicator flex items-center gap-2">
+              <div className={`status-dot h-2 w-2 rounded-full ${isChatEnded ? 'bg-gray-500' : 'bg-green-400'}`} />
+              <span className="status-text text-xs">{isChatEnded ? 'Ended' : 'Online'}</span>
+            </div>
+
+            <button
+              onClick={handleEndChat}
+              className="end-chat-button p-2 rounded-md text-sm md:text-base hover:bg-surface-light/20"
+              aria-label="End conversation"
+            >
+              End
+            </button>
           </div>
         </div>
+      </header>
 
-        <div className="messages-container">
-          <div className="messages-wrapper">
-            
-            {isChatEnded && (
-              <div className="end-banner">
-                Conversation ended.
+      {/* Messages area - grow to fill available space */}
+      <main className="messages-container flex-1 overflow-auto px-3 md:px-6 py-3">
+        <div className="max-w-3xl mx-auto messages-wrapper flex flex-col gap-3">
+
+          {isChatEnded && (
+            <div className="end-banner text-center text-sm text-surface-light py-2 bg-surface/60 rounded-md">
+              Conversation ended.
+            </div>
+          )}
+
+          {messages.map(msg => (
+            <div
+              key={msg.id}
+              className={`message flex gap-3 items-start ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              {/* Avatar - smaller on mobile */}
+              <div className={`message-avatar ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+                {msg.role === 'user' ? (
+                  <div className="avatar-user w-8 h-8 md:w-10 md:h-10 rounded-full bg-surface flex items-center justify-center">
+                    <User size={16} />
+                  </div>
+                ) : (
+                  <div className="avatar-assistant w-8 h-8 md:w-10 md:h-10 rounded-full bg-surface flex items-center justify-center">
+                    <Zap size={16} />
+                  </div>
+                )}
               </div>
-            )}
 
-            {messages.map(msg => (
-              <div
-                key={msg.id}
-                className={`message ${msg.role === 'user' ? 'message-user' : 'message-assistant'}`}
-              >
-                <div className="message-avatar">
-                  {msg.role === 'user' ? (
-                    <div className="avatar-user"><User size={18} /></div>
-                  ) : (
-                    <div className="avatar-assistant"><Zap size={18} /></div>
-                  )}
+              <div className={`message-content max-w-[78%] ${msg.role === 'user' ? 'order-1 text-right' : 'order-2 text-left'}`}>
+                <div className="message-header text-xxs text-surface-light mb-1 flex items-center justify-between">
+                  <span className="message-role text-xs font-medium">{msg.role === 'user' ? 'You' : persona?.name || 'AI Assistant'}</span>
+                  <span className="message-time text-xs text-surface-light">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
 
-                <div className="message-content">
-                  <div className="message-header">
-                    <span className="message-role">
-                      {msg.role === 'user' ? 'You' : persona?.name || 'AI Assistant'}
-                    </span>
-                    <span className="message-time">
-                      {new Date(msg.timestamp).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
-                  <div className="message-bubble"><p>{msg.content}</p></div>
-                </div>
-              </div>
-            ))}
-
-            {isTyping && !isChatEnded && (
-              <div className="message message-assistant">
-                <div className="message-avatar">
-                  <div className="avatar-assistant"><Zap size={18} /></div>
-                </div>
-                <div className="message-content">
-                  <div className="message-header">
-                    <span className="message-role">{persona?.name}</span>
-                    <span className="message-time typing-indicator-text">typing...</span>
-                  </div>
-                  <div className="message-bubble typing-bubble">
-                    <p>{typingText}<span className="cursor-blink">|</span></p>
-                  </div>
+                <div className={`message-bubble inline-block p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-primary/80 text-white ml-auto' : 'bg-surface-light/10 text-white'}`}>
+                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                 </div>
               </div>
-            )}
+            </div>
+          ))}
 
-            <div ref={messagesEndRef} />
-          </div>
+          {isTyping && !isChatEnded && (
+            <div className="message flex gap-3 items-start">
+              <div className="message-avatar order-1">
+                <div className="avatar-assistant w-8 h-8 rounded-full bg-surface flex items-center justify-center"><Zap size={16} /></div>
+              </div>
+
+              <div className="message-content order-2 max-w-[78%]">
+                <div className="message-header text-xxs text-surface-light mb-1">
+                  <span className="message-role text-xs">{persona?.name}</span>
+                  <span className="message-time typing-indicator-text text-xs text-surface-light">typing...</span>
+                </div>
+                <div className="message-bubble typing-bubble inline-block p-3 rounded-2xl bg-surface-light/10">
+                  <p className="whitespace-pre-wrap break-words">{typingText}<span className="cursor-blink">|</span></p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
+      </main>
 
-        {/* HIDE INPUT WHEN CHAT ENDED */}
-        {!isChatEnded && (
-          <div className="input-section">
-            <div className="input-container">
-              <div className="input-wrapper">
+      {/* Input area - fixed to bottom on mobile, respects safe-area */}
+      {!isChatEnded && (
+        <div className="input-section sticky bottom-0 z-30 bg-surface/95 backdrop-blur-md border-t border-surface-light" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="max-w-3xl mx-auto px-3 md:px-6 py-3">
+            <div className="input-container bg-transparent">
+              <div className="input-wrapper flex items-end gap-2">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask me anything..."
-                  className="message-input"
+                  className="message-input flex-1 min-h-[44px] md:min-h-[48px] px-4 py-2 rounded-lg bg-surface placeholder:text-surface-light focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={isLoading}
+                  aria-label="Message input"
                 />
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleEndChat}
-                    className="end-chat-button"
-                    title="End Conversation"
-                  >
-                    ✕
-                  </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!input.trim() || isLoading}
+                  className="send-button p-3 rounded-lg flex items-center justify-center disabled:opacity-50"
+                  aria-label="Send message"
+                >
+                  <Send size={18} />
+                </button>
 
-                  <button
-                    onClick={handleSubmit}
-                    disabled={!input.trim() || isLoading}
-                    className="send-button"
-                  >
-                    <Send size={20} />
-                  </button>
-                </div>
+                <button
+                  onClick={handleEndChat}
+                  className="end-chat-button p-3 rounded-lg ml-1"
+                  title="End Conversation"
+                  aria-label="End conversation"
+                >
+                  ✕
+                </button>
               </div>
 
-              <p className="input-hint">
-                Press <kbd>Enter</kbd> to send, <kbd>Shift + Enter</kbd> for new line
-              </p>
+              <p className="input-hint text-xs text-surface-light mt-2">Press <kbd className="px-1 py-0.5 rounded bg-surface">Enter</kbd> to send, <kbd className="px-1 py-0.5 rounded bg-surface">Shift + Enter</kbd> for new line</p>
             </div>
           </div>
-        )}
-
-      </div>
+        </div>
+      )}
     </div>
   );
 }
