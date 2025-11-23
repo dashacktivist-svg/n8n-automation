@@ -636,3 +636,152 @@ body {
     display: none;
   }
 }
+
+/* Responsive & mobile-friendly tweaks for your chatbot layout
+   - Additions are intentionally minimal so they layer on top of your existing styles.
+   - Includes safe-area handling for iOS notch, sticky input behavior, textarea auto-resize CSS, and mobile padding/size reductions.
+*/
+
+:root {
+  /* keep your existing variables; these additions won't overwrite anything important */
+  --chat-vertical-gap: 1rem;
+  --chat-max-width: 1100px;
+}
+
+/* Ensure the chat container respects safe-area insets on mobile (notch / home indicator) */
+.chat-wrapper {
+  padding-top: calc(env(safe-area-inset-top) + 1rem);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+}
+
+.chat-container {
+  /* make full-height on mobile but leave comfortable margins on desktop */
+  height: calc(100vh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 2rem));
+  max-height: calc(900px - (env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  max-width: var(--chat-max-width);
+  display: grid;
+  grid-template-rows: auto 1fr auto; /* header, messages, input */
+}
+
+/* Make messages container scrollable and not hidden by on-screen keyboard */
+.messages-container {
+  padding: 1rem 1rem 1.25rem; /* slightly reduced padding for mobile comfort */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+}
+
+/* Extra bottom padding so last message isn't hidden by input / safe-area */
+.messages-wrapper {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+/* Make header compact on small screens */
+.chat-header {
+  padding: 0.75rem 1rem;
+}
+.header-title {
+  font-size: 1.125rem;
+}
+.header-subtitle {
+  display: inline-block;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Message bubbles and avatars scale down on small viewports */
+.avatar-user, .avatar-assistant {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.message-bubble {
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+}
+
+/* Typing bubble adjustments */
+.typing-bubble p { margin: 0; }
+
+/* Input section: make it sticky to bottom so mobile keyboards don't hide it */
+.input-section {
+  position: sticky;
+  bottom: env(safe-area-inset-bottom);
+  z-index: 60;
+  padding: 0.75rem 1rem 1.25rem;
+  background: linear-gradient(180deg, rgba(15,23,42,0.6), rgba(15,23,42,0.8));
+  backdrop-filter: blur(6px);
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.input-container {
+  width: 100%;
+  max-width: var(--chat-max-width);
+  margin: 0 auto;
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  padding: 0.5rem;
+}
+
+/* Use textarea for auto-resize & keyboard friendliness */
+.message-input {
+  flex: 1;
+  min-height: 40px;
+  max-height: 220px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  resize: none;           /* we control height programmatically */
+  overflow: auto;
+  line-height: 1.4;
+}
+
+/* Make buttons slightly smaller on mobile */
+.send-button, .end-chat-button {
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+/* Small devices: tighter spacing and font-size reductions */
+@media (max-width: 480px) {
+  .chat-container { border-radius: 12px; }
+  .messages-wrapper { gap: 1rem; }
+  .message { gap: 0.6rem; }
+  .message-header { padding: 0 0.25rem; }
+  .header-title { font-size: 1rem; }
+  .header-subtitle { display: none; } /* save space */
+  .input-hint { display: none; }
+}
+
+/* Very small / compact phones */
+@media (max-width: 360px) {
+  .avatar-user, .avatar-assistant { width: 32px; height: 32px; }
+  .message-bubble { padding: 0.6rem 0.8rem; }
+  .status-text { font-size: 0.75rem; }
+}
+
+/* Desktop enhancements */
+@media (min-width: 1024px) {
+  .chat-container { height: 85vh; }
+  .messages-container { padding: 2rem 2rem 2.5rem; }
+  .input-section { padding: 1.25rem 2rem 2rem; }
+}
+
+/* Utility: auto-expand textarea using only CSS where possible (best-effort). For perfect auto-resize, pair with a tiny JS helper. */
+.message-input[rows] {
+  overflow-y: auto;
+}
+
+/* Focus visible states for keyboard users */
+.message-input:focus { outline: 2px solid rgba(99,102,241,0.12); }
+.send-button:focus, .end-chat-button:focus { outline: 2px solid rgba(99,102,241,0.12); }
+
+/* Reduce motion for users who prefer that */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
